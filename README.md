@@ -18,12 +18,15 @@ graphwright inverts all three. It is a library of pure planning functions plus t
 
 - **Extraction** — LLM-based tagging of people / places / concepts with character spans. Provider-agnostic: you supply an `LLMCaller` that adapts your gateway. Spans are repaired locally (LLMs miscount characters, reliably, especially in non-Latin scripts); the model answers *what* was mentioned, the library computes *where*. Returns an empty extraction on any model failure, never throws.
 - **Resolution cascade** — deterministic-first entity resolution:
-  1. exact match on normalized names and aliases (the only stage whose proposals default to auto-acceptable),
-  2. an entropy gate that keeps short names ("Ali", "علی") away from fuzzy matching, where one edit step reaches a different real person,
-  3. 3-gram Jaccard against the catalog (MinHash/LSH-pruned when large),
-  4. an optional pairwise LLM judge, budget-capped.
+  1. the user's own remembered decisions (see adaptive matching below),
+  2. exact match on normalized names and aliases,
+  3. cross-script phonetic keys (consonant skeletons; "فائزه" and "Faeze" share zero shingles, so nothing below exact could bridge scripts without this stage),
+  4. an entropy gate that keeps short names ("Ali", "علی") away from fuzzy matching, where one edit step reaches a different real person,
+  5. 3-gram Jaccard against the catalog (MinHash/LSH-pruned when large),
+  6. an optional pairwise LLM judge, budget-capped.
 
-  Stages 1–3 run with no LLM and no network. Normalization is cross-script aware: Arabic/Persian character folding (`ي→ی`, `ك→ک`), diacritic and tatweel stripping, ZWNJ handling, so "پریسا" and a confirmed alias of "Parisa Rostami" meet at the exact stage.
+  Stages 1–5 run with no LLM and no network. Phonetic rules are per-language schemes (`latinScheme`, `persianScheme`); adding a script is a new `PhoneticScheme`, passed at the call site or contributed upstream.
+- **Adaptive matching** — a `DecisionMemory` seam remembers each user's confirmations and rejections per surface, optionally scoped by a host-chosen context (a journal, a thread). A remembered confirmation resolves on the user's own authority; a remembered rejection suppresses that pairing at every stage, including exact, so the review queue never re-asks a settled question. Normalization is cross-script aware: Arabic/Persian character folding (`ي→ی`, `ك→ک`), diacritic and tatweel stripping, ZWNJ handling, so "پریسا" and a confirmed alias of "Parisa Rostami" meet at the exact stage.
 - **Bi-temporal edges** — relationships carry `valid_at`/`invalid_at` (when the fact held in the world) and `recorded_at`/`expired_at` (when the system learned and superseded it). Contradictions produce *invalidation proposals*; accepted ones close the old edge's validity window. Nothing is deleted; history stays queryable.
 - **Provenance and support** — every edge keeps the mention ids that support it. Deleting a source document yields a support-removal plan; edges that lose all support are flagged for review, not silently dropped.
 - **Storage seam** — a `GraphStore` interface plus an in-memory reference implementation. Bring Postgres, SQLite, or a graph DB; the library never touches storage on its own.

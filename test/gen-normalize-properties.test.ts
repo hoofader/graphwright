@@ -296,7 +296,9 @@ describe('resolveCandidates — determinism (no judge)', () => {
     expect(a).toEqual(b);
     // Anchors so equality is not vacuous over all-'none' output.
     expect(a.find((p) => p.ref === 'r1')).toMatchObject({ entity_id: 'fa0', basis: 'exact' });
-    expect(a.find((p) => p.ref === 'r3')).toMatchObject({ entity_id: 'fa5', basis: 'fuzzy' });
+    // r3's dropped vowel keeps the consonant skeleton, so the phonetic
+    // stage claims it ahead of fuzzy; same entity either way.
+    expect(a.find((p) => p.ref === 'r3')).toMatchObject({ entity_id: 'fa5', basis: 'phonetic' });
     expect(a.find((p) => p.ref === 'r5')).toMatchObject({ entity_id: null, basis: 'none' });
     expect(a.find((p) => p.ref === 'r6')).toMatchObject({ entity_id: 'fa0', basis: 'exact' });
     expect(a.find((p) => p.ref === 'r7')).toMatchObject({ entity_id: 'fa2', basis: 'exact' });
@@ -340,11 +342,12 @@ describe('resolveCandidates — determinism (no judge)', () => {
     const a = await resolveCandidates(batch(), bigCatalog());
     const b = await resolveCandidates(batch(), bigCatalog());
     expect(a).toEqual(b);
-    // Anchor: the fuzzy hit survived LSH pruning, so the equality
-    // above covers the pruned path, not an early bail-out.
+    // Anchor: q1's one-letter drop keeps the consonant skeleton, so
+    // the phonetic stage claims it before fuzzy; same entity either
+    // way. q3 still walks the LSH-pruned fuzzy path to its 'none'.
     expect(a.find((p) => p.ref === 'q1')).toMatchObject({
       entity_id: 'tgt-fa',
-      basis: 'fuzzy',
+      basis: 'phonetic',
       requires_review: true,
     });
     expect(a.find((p) => p.ref === 'q2')).toMatchObject({ entity_id: 'tgt-en', basis: 'exact' });

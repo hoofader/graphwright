@@ -107,7 +107,7 @@ describe('resolveCandidates — cascade', () => {
     const out = await resolveCandidates(
       [{ ref: 'm1', kind: 'person', label: 'Parisah Rostami' }],
       catalog,
-      { fuzzyThreshold: 0.5 },
+      { fuzzyThreshold: 0.5, phoneticSchemes: [] },
     );
     expect(out[0]).toMatchObject({ entity_id: 'p1', basis: 'fuzzy', requires_review: true });
   });
@@ -149,6 +149,7 @@ describe('resolveCandidates — cascade', () => {
       catalog,
       {
         fuzzyThreshold: 0.5,
+        phoneticSchemes: [],
         judge: async () => ({ same: true, confidence: 0.93 }),
       },
     );
@@ -166,6 +167,7 @@ describe('resolveCandidates — cascade', () => {
       catalog,
       {
         fuzzyThreshold: 0.4,
+        phoneticSchemes: [],
         judge: async () => ({ same: false, confidence: 0.9 }),
       },
     );
@@ -180,6 +182,7 @@ describe('resolveCandidates — cascade', () => {
       catalog,
       {
         fuzzyThreshold: 0.5,
+        phoneticSchemes: [],
         judge: async () => {
           throw new Error('gateway down');
         },
@@ -198,6 +201,7 @@ describe('resolveCandidates — cascade', () => {
       catalog,
       {
         fuzzyThreshold: 0.5,
+        phoneticSchemes: [],
         judgeBudget: 1,
         judge: async () => {
           calls++;

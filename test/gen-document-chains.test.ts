@@ -267,7 +267,9 @@ describe('Chain A — English: introduce, alias link, typo, new person', () => {
       mentions: [{ kind: 'person', surface: 'Ramin Golzaar' }],
       now: T('2026-01-20T10:00:00Z'),
     });
-    expect(d3.proposals[0]).toMatchObject({ basis: 'fuzzy', requires_review: true });
+    // The doubled vowel keeps the consonant skeleton, so the phonetic
+    // stage claims this typo ahead of fuzzy; same entity, still review.
+    expect(d3.proposals[0]).toMatchObject({ basis: 'phonetic', requires_review: true });
     expect(d3.proposals[0]!.entity_id).toBe(d1.entityIdByLabel.get('Ramin Golzar'));
     expect(d3.mentions[0]).toMatchObject({ status: 'pending', entity_id: null });
     expect(await store.listEntities('person')).toHaveLength(2);
@@ -518,7 +520,9 @@ describe('Chain E — cross-doc dedup stress: six roads to one person', () => {
       mentions: [{ kind: 'person', surface: 'Leila Sharfi' }],
       now: T('2026-06-03T10:00:00Z'),
     });
-    expect(d3.proposals[0]).toMatchObject({ basis: 'fuzzy', entity_id: leilaId });
+    // 'Sharfi' differs from 'Sharifi' only in a vowel, so the phonetic
+    // stage claims it ahead of fuzzy; same entity, still pending.
+    expect(d3.proposals[0]).toMatchObject({ basis: 'phonetic', entity_id: leilaId });
 
     // Arabic-keyboard yeh: exact via the normalized Persian alias.
     const d4 = await ingestDoc(store, {

@@ -132,7 +132,12 @@ describe('fuzzy typo families on 12+ char names', () => {
       // Sanity-pin the similarity first so a threshold tweak in the
       // test is never mistaken for a cascade regression.
       expect(J(candidate, original)).toBeGreaterThan(0.5);
-      const p = await resolveOneLabel(candidate, CATALOG, { fuzzyThreshold: 0.5 });
+      // The phonetic stage would intercept these fixtures; this test
+      // pins the fuzzy lane in isolation.
+      const p = await resolveOneLabel(candidate, CATALOG, {
+        fuzzyThreshold: 0.5,
+        phoneticSchemes: [],
+      });
       expect(p).toMatchObject({ entity_id: expected, basis: 'fuzzy', requires_review: true });
       expect(p.score).toBeGreaterThan(0.5);
       expect(p.score).toBeLessThan(1);
@@ -177,6 +182,7 @@ describe('ambiguity — two close catalog hits suppress the judge', () => {
   it('judge is not consulted and the proposal stays review-only', async () => {
     let judgeCalls = 0;
     const p = await resolveOneLabel('Shahrokh Malekzade', dupCatalog, {
+      phoneticSchemes: [],
       judge: async () => {
         judgeCalls++;
         return { same: true, confidence: 0.99 };
@@ -193,6 +199,7 @@ describe('ambiguity — two close catalog hits suppress the judge', () => {
     // missing fuzzy hit or an exhausted budget.
     let judgeCalls = 0;
     const p = await resolveOneLabel('Shahrokh Malekzade', [dupCatalog[0]!], {
+      phoneticSchemes: [],
       judge: async () => {
         judgeCalls++;
         return { same: true, confidence: 0.9 };
@@ -243,17 +250,23 @@ describe('LSH cutover (catalog > 500)', () => {
       shingles(normalizeName('شهربانو گلپایگانی')),
     );
     expect(sim).toBeGreaterThanOrEqual(0.9);
-    const p = await resolveOneLabel(candidate, bigCatalog);
+    // The phonetic stage would intercept this fixture; this test pins
+    // the LSH-pruned fuzzy lane in isolation.
+    const p = await resolveOneLabel(candidate, bigCatalog, { phoneticSchemes: [] });
     expect(p).toMatchObject({ entity_id: 'tgt', basis: 'fuzzy', requires_review: true });
     expect(p.score).toBeCloseTo(sim, 10);
   });
 
   it('LSH path and all-pairs path agree on the same input', async () => {
     // LSH is an optimization; if pruning changes the proposal, recall
-    // has silently regressed.
+    // has silently regressed. Phonetic is off so the comparison stays
+    // about the fuzzy lane and is not satisfied upstream of it.
     const candidate = 'شهربانو گلپایگان';
-    const viaLsh = await resolveOneLabel(candidate, bigCatalog);
-    const viaAllPairs = await resolveOneLabel(candidate, bigCatalog, { lshCutover: 1_000_000 });
+    const viaLsh = await resolveOneLabel(candidate, bigCatalog, { phoneticSchemes: [] });
+    const viaAllPairs = await resolveOneLabel(candidate, bigCatalog, {
+      lshCutover: 1_000_000,
+      phoneticSchemes: [],
+    });
     expect(viaLsh).toEqual(viaAllPairs);
   });
 });
@@ -283,8 +296,11 @@ describe('batch consistency and judge economics', () => {
 
   it('judge calls stay at the number of distinct fuzzy groups, not the batch size', async () => {
     let judgeCalls = 0;
+    // The phonetic stage would intercept the typo groups before the
+    // judge; this test pins judge economics on the fuzzy lane.
     const out = await resolveCandidates(batch(), CATALOG, {
       fuzzyThreshold: 0.6,
+      phoneticSchemes: [],
       judge: async () => {
         judgeCalls++;
         return { same: true, confidence: 0.9 };
@@ -306,9 +322,12 @@ describe('batch consistency and judge economics', () => {
 
   it('budget cap degrades later groups to the deterministic fuzzy answer', async () => {
     let judgeCalls = 0;
+    // The phonetic stage would intercept the typo groups before the
+    // judge; this test pins the budget cap on the fuzzy lane.
     const out = await resolveCandidates(batch(), CATALOG, {
       fuzzyThreshold: 0.6,
       judgeBudget: 1,
+      phoneticSchemes: [],
       judge: async () => {
         judgeCalls++;
         return { same: true, confidence: 0.9 };
