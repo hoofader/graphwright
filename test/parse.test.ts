@@ -156,14 +156,52 @@ describe('parseExtractionResponse', () => {
     expect(parseExtractionResponse(resp(0.8), text, FLOOR).concepts).toHaveLength(1);
   });
 
-  it('rejects negative and non-integer claimed spans', () => {
+  it('malformed claimed spans with a findable surface fall back to search', () => {
+    // The claim is advisory; only surface findability decides whether
+    // the mention survives. A negative claim in particular must not be
+    // trusted as-is: substring clamps negatives to 0, which could leak
+    // a negative span into output.
     const text = 'Met Bo.';
     const bad = (span_start: unknown, span_end: unknown) =>
       JSON.stringify({
         extraction: {
           people: [
             {
-              surface_form: 'Zo', // not in text → fallback search also fails
+              surface_form: 'Bo',
+              span_start,
+              span_end,
+              candidate_label: 'Bo',
+              candidate_id: null,
+              confidence: 0.9,
+            },
+          ],
+          places: [],
+          concepts: [],
+        },
+      });
+    const cases: Array<[unknown, unknown]> = [
+      [-1, 2], // negative
+      [0.5, 2], // float
+      ['4', '6'], // string
+      [4, undefined], // one-sided
+    ];
+    for (const [s, e] of cases) {
+      const out = parseExtractionResponse(bad(s, e), text, FLOOR);
+      expect(out.people).toHaveLength(1);
+      expect(out.people[0]).toMatchObject({ span_start: 4, span_end: 6 });
+    }
+  });
+
+  it('malformed claimed spans with an unfindable surface are dropped', () => {
+    // With no occurrence in the text, the search has nothing to repair
+    // toward and the broken claim cannot vouch for anything.
+    const text = 'Met Bo.';
+    const bad = (span_start: unknown, span_end: unknown) =>
+      JSON.stringify({
+        extraction: {
+          people: [
+            {
+              surface_form: 'Zo',
               span_start,
               span_end,
               candidate_label: 'Zo',
