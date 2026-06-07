@@ -13,6 +13,28 @@ export class InMemoryGraphStore implements GraphStore {
   private edges = new Map<string, Edge>();
   private episodes = new Map<string, Episode>();
 
+  // Rows never leave the store live: a DB-backed implementation can't
+  // hand back its storage, so mutating a returned row here must not
+  // bypass the write methods either (addAlias dedup, support
+  // provenance). Shallow copy with fresh arrays is enough — rows hold
+  // no nested objects beyond arrays and Dates, and Dates are only ever
+  // replaced, never mutated in place.
+  private static cloneEntity(e: Entity): Entity {
+    return { ...e, aliases: [...e.aliases] };
+  }
+
+  private static cloneMention(m: Mention): Mention {
+    return { ...m };
+  }
+
+  private static cloneEdge(e: Edge): Edge {
+    return { ...e, support: [...e.support] };
+  }
+
+  private static cloneEpisode(e: Episode): Episode {
+    return { ...e, mention_ids: [...e.mention_ids] };
+  }
+
   // ── Entities ─────────────────────────────────────────────────────
 
   async createEntity(input: Omit<Entity, 'id' | 'created_at'>): Promise<Entity> {
@@ -23,16 +45,18 @@ export class InMemoryGraphStore implements GraphStore {
       created_at: new Date(),
     };
     this.entities.set(entity.id, entity);
-    return entity;
+    return InMemoryGraphStore.cloneEntity(entity);
   }
 
   async getEntity(id: string): Promise<Entity | null> {
-    return this.entities.get(id) ?? null;
+    const e = this.entities.get(id);
+    return e ? InMemoryGraphStore.cloneEntity(e) : null;
   }
 
   async listEntities(kind?: EntityKind): Promise<Entity[]> {
     const all = [...this.entities.values()];
-    return kind === undefined ? all : all.filter((e) => e.kind === kind);
+    const out = kind === undefined ? all : all.filter((e) => e.kind === kind);
+    return out.map(InMemoryGraphStore.cloneEntity);
   }
 
   async addAlias(entity_id: string, alias: string): Promise<void> {
@@ -46,11 +70,12 @@ export class InMemoryGraphStore implements GraphStore {
   async createMention(input: Omit<Mention, 'id' | 'created_at'>): Promise<Mention> {
     const mention: Mention = { ...input, id: randomUUID(), created_at: new Date() };
     this.mentions.set(mention.id, mention);
-    return mention;
+    return InMemoryGraphStore.cloneMention(mention);
   }
 
   async getMention(id: string): Promise<Mention | null> {
-    return this.mentions.get(id) ?? null;
+    const m = this.mentions.get(id);
+    return m ? InMemoryGraphStore.cloneMention(m) : null;
   }
 
   async listMentions(filter?: {
@@ -62,7 +87,7 @@ export class InMemoryGraphStore implements GraphStore {
     if (filter?.source_id !== undefined) out = out.filter((m) => m.source_id === filter.source_id);
     if (filter?.entity_id !== undefined) out = out.filter((m) => m.entity_id === filter.entity_id);
     if (filter?.status !== undefined) out = out.filter((m) => m.status === filter.status);
-    return out;
+    return out.map(InMemoryGraphStore.cloneMention);
   }
 
   async setMentionStatus(
@@ -81,11 +106,12 @@ export class InMemoryGraphStore implements GraphStore {
   async createEdge(input: Omit<Edge, 'id'>): Promise<Edge> {
     const edge: Edge = { ...input, support: [...input.support], id: randomUUID() };
     this.edges.set(edge.id, edge);
-    return edge;
+    return InMemoryGraphStore.cloneEdge(edge);
   }
 
   async getEdge(id: string): Promise<Edge | null> {
-    return this.edges.get(id) ?? null;
+    const e = this.edges.get(id);
+    return e ? InMemoryGraphStore.cloneEdge(e) : null;
   }
 
   async listCurrentEdges(filter?: {
@@ -99,7 +125,7 @@ export class InMemoryGraphStore implements GraphStore {
     if (filter?.predicate !== undefined) {
       out = out.filter((e) => e.predicate === filter.predicate);
     }
-    return out;
+    return out.map(InMemoryGraphStore.cloneEdge);
   }
 
   async invalidateEdge(id: string, invalid_at: Date): Promise<void> {
@@ -129,11 +155,12 @@ export class InMemoryGraphStore implements GraphStore {
       id: randomUUID(),
     };
     this.episodes.set(episode.id, episode);
-    return episode;
+    return InMemoryGraphStore.cloneEpisode(episode);
   }
 
   async listEpisodes(source_id?: string): Promise<Episode[]> {
     const all = [...this.episodes.values()];
-    return source_id === undefined ? all : all.filter((e) => e.source_id === source_id);
+    const out = source_id === undefined ? all : all.filter((e) => e.source_id === source_id);
+    return out.map(InMemoryGraphStore.cloneEpisode);
   }
 }

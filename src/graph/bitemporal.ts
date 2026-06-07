@@ -42,7 +42,8 @@ export interface InvalidationProposal {
   /** Why: the incoming fact, for the review surface. */
   incoming: IncomingFact;
   /** Suggested invalid_at for the old edge (the new fact's valid_at,
-   * else now). */
+   * else now). Never earlier than the old edge's own valid_at: a fact
+   * that predates an edge yields no proposal for it at all. */
   invalid_at: Date;
 }
 
@@ -61,6 +62,14 @@ export interface PlanEdgeUpsertResult {
  * predicate, and the CURRENT same-source edges (expired_at null), say
  * what should happen. The host applies the plan inside its own
  * transaction and review flow.
+ *
+ * Out-of-order ingestion: an incoming fact whose valid_at predates a
+ * current edge's known valid_at does not invalidate that edge. The
+ * backfilled fact is the one that already ended, so it inserts
+ * alongside, and bounding ITS validity window is the host's review
+ * decision. Edges with unknown valid_at still get a proposal —
+ * proposals are reviewable, and an unknown start can't prove the
+ * window would be negative.
  */
 export function planEdgeUpsert(
   incoming: IncomingFact,
@@ -87,11 +96,18 @@ export function planEdgeUpsert(
     const invalid_at = incoming.valid_at ?? now;
     return {
       action: 'insert',
-      invalidations: relevant.map((e) => ({
-        edge_id: e.id,
-        incoming,
-        invalid_at,
-      })),
+      invalidations: relevant
+        // Closing an edge before it opened would be a negative
+        // validity window; a backfilled fact doesn't supersede a
+        // newer-dated one. Equal instants still propose: the
+        // zero-length window is the tie-break that lets the newer
+        // recording win while keeping the old row in history.
+        .filter((e) => e.valid_at === null || invalid_at.getTime() >= e.valid_at.getTime())
+        .map((e) => ({
+          edge_id: e.id,
+          incoming,
+          invalid_at,
+        })),
     };
   }
 

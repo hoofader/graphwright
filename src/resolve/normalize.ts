@@ -32,8 +32,15 @@ export function normalizeName(raw: string): string {
     .replace(ZERO_WIDTH, '');
   s = s.toLowerCase();
   // Strip leading/trailing punctuation the extractor sometimes keeps
-  // ("Sara," / "«سارا»"), collapse internal whitespace.
-  s = s.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, '');
-  s = s.replace(/\s+/g, ' ').trim();
+  // ("Sara," / "«سارا»") and collapse whitespace, repeated to a fixed
+  // point: alternating layers (' «Sara» ', '" «Sara» "') shield each
+  // other from a single pass, and idempotence is what lets a stored
+  // normalized alias and a freshly normalized candidate agree.
+  let prev: string;
+  do {
+    prev = s;
+    s = s.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, '');
+    s = s.replace(/\s+/g, ' ').trim();
+  } while (s !== prev);
   return s;
 }
