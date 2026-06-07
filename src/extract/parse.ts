@@ -120,13 +120,22 @@ function validateMention(
 /**
  * Resolve where in `originalText` `surface_form` actually appears.
  *
- *   1. If the LLM gave explicit integer spans AND those spans extract
- *      exactly `surface_form` from `originalText`, use them as-is.
- *      Negative/non-integer spans are explicitly rejected.
- *   2. Otherwise search for `surface_form` in `originalText`, skipping
- *      any (start,end) pair already used for this kind. This handles
- *      duplicate occurrences (e.g. "Sarah met Sarah").
- *   3. If `surface_form` cannot be found anywhere, return null.
+ * The claimed span is advisory. It is used only when it is a pair of
+ * non-negative integers within the text that extracts exactly
+ * `surface_form`; any other claim (wrong type, one-sided, negative,
+ * out of range, mismatching) is ignored and the surface search below
+ * decides. Surface findability, not the offset claim, is what vouches
+ * for a mention: dropping a findable mention over a garbage offset
+ * would be the silent-drop failure this resolver exists to prevent.
+ * Negative claims must not reach the exact-accept path because
+ * `substring` clamps negative indices to 0, which could emit a
+ * negative span into output when the clamped extraction happens to
+ * match the surface.
+ *
+ * The search skips any (start,end) pair already used for this kind,
+ * so duplicate occurrences (e.g. "Sarah met Sarah") map to successive
+ * positions. Returns null only when `surface_form` does not occur in
+ * `originalText` at an unconsumed position.
  */
 function resolveSpan(
   originalText: string,
@@ -136,29 +145,20 @@ function resolveSpan(
 ): { span_start: number; span_end: number } | null {
   const claimedStart = r.span_start;
   const claimedEnd = r.span_end;
-  if (claimedStart !== undefined || claimedEnd !== undefined) {
-    if (
-      typeof claimedStart !== 'number' ||
-      typeof claimedEnd !== 'number' ||
-      !Number.isFinite(claimedStart) ||
-      !Number.isFinite(claimedEnd) ||
-      !Number.isInteger(claimedStart) ||
-      !Number.isInteger(claimedEnd)
-    ) {
-      return null;
-    }
-    if (claimedStart < 0 || claimedEnd <= claimedStart) {
-      return null;
-    }
-    if (
-      claimedEnd <= originalText.length &&
-      originalText.substring(claimedStart, claimedEnd) === surface_form
-    ) {
-      const key = `${claimedStart}:${claimedEnd}`;
-      if (!consumedByExactPos.has(key)) {
-        consumedByExactPos.add(key);
-        return { span_start: claimedStart, span_end: claimedEnd };
-      }
+  if (
+    typeof claimedStart === 'number' &&
+    typeof claimedEnd === 'number' &&
+    Number.isInteger(claimedStart) &&
+    Number.isInteger(claimedEnd) &&
+    claimedStart >= 0 &&
+    claimedEnd > claimedStart &&
+    claimedEnd <= originalText.length &&
+    originalText.substring(claimedStart, claimedEnd) === surface_form
+  ) {
+    const key = `${claimedStart}:${claimedEnd}`;
+    if (!consumedByExactPos.has(key)) {
+      consumedByExactPos.add(key);
+      return { span_start: claimedStart, span_end: claimedEnd };
     }
   }
 
