@@ -58,6 +58,16 @@ export type {
 } from './resolve/cascade.js';
 export { normalizeName } from './resolve/normalize.js';
 export {
+  phoneticKeys,
+  phoneticMatch,
+  latinScheme,
+  persianScheme,
+  DEFAULT_PHONETIC_SCHEMES,
+} from './resolve/phonetic/index.js';
+export type { PhoneticScheme } from './resolve/phonetic/index.js';
+export { InMemoryDecisionMemory } from './resolve/memory.js';
+export type { Decision, DecisionLookup, DecisionMemory, DecisionRecord } from './resolve/memory.js';
+export {
   shannonEntropy,
   passesEntropyGate,
   DEFAULT_FUZZY_ENTROPY_THRESHOLD,
