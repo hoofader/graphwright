@@ -160,6 +160,35 @@ describe('decision memory — adaptive per-user matching', () => {
     expect(after.rejected.has('p1')).toBe(false);
   });
 
+  it('converges on the last decision across repeated mind-changes', async () => {
+    const memory = new InMemoryDecisionMemory();
+    // Applied oldest-first, as a host replays a decision log.
+    for (const decision of ['rejected', 'confirmed', 'rejected', 'confirmed'] as const) {
+      memory.record({ surface: 'پری', kind: 'person', entity_id: 'p1', decision });
+    }
+    const after = await memory.lookup('پری', 'person');
+    expect(after.confirmed).toBe('p1');
+    expect(after.rejected.has('p1')).toBe(false);
+  });
+
+  it('a corrected mistaken rejection lets the entity win again in the cascade', async () => {
+    // The host's "rejected by mistake, then re-linked" path: the
+    // correcting confirm, replayed last, must clear the suppression so
+    // the entity resolves without review.
+    const withAlias: CatalogEntity[] = [
+      { id: 'p1', kind: 'person', label: 'Parisa Rostami', aliases: ['پری'] },
+    ];
+    const memory = new InMemoryDecisionMemory();
+    memory.record({ surface: 'پری', kind: 'person', entity_id: 'p1', decision: 'rejected', context: 'diary' });
+    memory.record({ surface: 'پری', kind: 'person', entity_id: 'p1', decision: 'confirmed', context: 'diary' });
+    const out = await resolveCandidates(
+      [{ ref: 'm0', kind: 'person', label: 'پری', context: 'diary' }],
+      withAlias,
+      { memory },
+    );
+    expect(out[0]).toMatchObject({ entity_id: 'p1', basis: 'remembered', requires_review: false });
+  });
+
   it('a confirmation pointing at an entity missing from the catalog is ignored', async () => {
     const memory = new InMemoryDecisionMemory();
     memory.record({ surface: 'پری', kind: 'person', entity_id: 'gone', decision: 'confirmed' });
