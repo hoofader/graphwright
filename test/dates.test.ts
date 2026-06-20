@@ -106,7 +106,7 @@ describe('confidence', () => {
   it('absolute forms score higher than a bare weekday', () => {
     expect(at('2026-05-24')[0]!.confidence).toBeGreaterThan(0.9);
     expect(at('see you tomorrow')[0]!.confidence).toBeGreaterThan(0.9);
-    expect(at('lunch on Monday')[0]!.confidence).toBeLessThan(0.7);
+    expect(at('grabbing lunch Monday')[0]!.confidence).toBeLessThan(0.7);
     // month-name without a year is less certain than with one.
     expect(at('May 24')[0]!.confidence).toBeLessThan(at('May 24, 2025')[0]!.confidence);
   });
@@ -117,8 +117,12 @@ describe('requireWeekdayQualifier', () => {
     extractDates(text, { reference: REF, requireWeekdayQualifier: true }).map((m) => m.surface_form);
 
   it('drops a bare weekday but keeps a qualified one (English)', () => {
-    expect(strict('lunch on Monday')).toEqual([]);
+    expect(strict('grabbing lunch Monday')).toEqual([]);
     expect(strict('coffee next Friday')).toEqual(['next Friday']);
+    // "on Monday" is a qualifier, so it survives the strict gate.
+    expect(extractDates('lunch on Monday', { reference: REF, requireWeekdayQualifier: true }).map((m) => m.date)).toEqual([
+      '2026-05-25',
+    ]);
   });
 
   it('drops a bare weekday but keeps a qualified one (Persian)', () => {

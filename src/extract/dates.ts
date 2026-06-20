@@ -226,10 +226,11 @@ const RULES: Rule[] = [
   {
     lang: 'en',
     confidence: 0.8,
-    re: new RegExp(`\\b(next|last|this)\\s+(${Object.keys(EN_WEEKDAYS).join('|')})\\b`, 'gi'),
+    re: new RegExp(`\\b(next|last|this|on)\\s+(${Object.keys(EN_WEEKDAYS).join('|')})\\b`, 'gi'),
     resolve: (m, ref) => {
       const dow = EN_WEEKDAYS[m[2]!.toLowerCase()];
       if (dow === undefined) return null;
+      // 'on'/'this' resolve to the upcoming occurrence (today if it matches).
       const dir = m[1]!.toLowerCase() === 'last' ? 'last' : m[1]!.toLowerCase() === 'next' ? 'next' : 'upcoming';
       return { date: iso(resolveWeekday(ref, dow, dir)), grain: 'day' };
     },
