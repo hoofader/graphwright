@@ -26,6 +26,9 @@ export interface DateMention {
   /** Resolved calendar date as ISO yyyy-mm-dd. */
   date: string;
   grain: DateGrain;
+  /** Rule confidence in [0, 1]. Explicit/absolute forms score highest;
+   * a bare weekday lowest. Hosts can threshold on it. */
+  confidence: number;
 }
 
 export interface ExtractDatesOptions {
@@ -33,6 +36,14 @@ export interface ExtractDatesOptions {
   reference: Date;
   /** Restrict to these languages. Default: both. */
   languages?: readonly DateLanguage[];
+  /**
+   * When true, a weekday only matches with a qualifier ("next Friday",
+   * not a bare "Friday"). Cuts false positives from prose like
+   * "Tuesday's coffee was great". Default false.
+   */
+  requireWeekdayQualifier?: boolean;
+  /** Reading order for slashed numeric dates (1/2/2026). Default 'MDY'. */
+  numericDateOrder?: 'MDY' | 'DMY';
 }
 
 // ─── calendar helpers ──────────────────────────────────────────────
@@ -127,13 +138,22 @@ const FA_WEEKDAYS: Array<[string, number]> = [
 interface Rule {
   lang: DateLanguage;
   re: RegExp;
-  resolve: (m: RegExpExecArray, ref: Date) => { date: string; grain: DateGrain } | null;
+  /** Base confidence; a resolve() may override per match. */
+  confidence: number;
+  /** Bare weekday — suppressed when opts.requireWeekdayQualifier. */
+  bareWeekday?: boolean;
+  resolve: (
+    m: RegExpExecArray,
+    ref: Date,
+    opts: ExtractDatesOptions,
+  ) => { date: string; grain: DateGrain; confidence?: number } | null;
 }
 
 const RULES: Rule[] = [
   // ── absolute (script-neutral, listed first so they win ties) ──
   {
     lang: 'en',
+    confidence: 0.95,
     re: /\b(\d{4})-(\d{2})-(\d{2})\b/g,
     resolve: (m) => {
       const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
@@ -143,6 +163,7 @@ const RULES: Rule[] = [
   },
   {
     lang: 'en',
+    confidence: 0.85,
     re: new RegExp(
       `\\b(${Object.keys(EN_MONTHS).join('|')})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s+(\\d{4}))?\\b`,
       'gi',
@@ -153,11 +174,12 @@ const RULES: Rule[] = [
       const day = Number(m[2]);
       if (day < 1 || day > 31) return null;
       const year = m[3] ? Number(m[3]) : ref.getUTCFullYear();
-      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day' };
+      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day', confidence: m[3] ? 0.95 : 0.85 };
     },
   },
   {
     lang: 'en',
+    confidence: 0.85,
     re: new RegExp(
       `\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(${Object.keys(EN_MONTHS).join('|')})\\.?(?:\\s+(\\d{4}))?\\b`,
       'gi',
@@ -168,21 +190,42 @@ const RULES: Rule[] = [
       const day = Number(m[1]);
       if (day < 1 || day > 31) return null;
       const year = m[3] ? Number(m[3]) : ref.getUTCFullYear();
-      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day' };
+      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day', confidence: m[3] ? 0.95 : 0.85 };
+    },
+  },
+  {
+    // Slashed numeric, reading order from opts.numericDateOrder.
+    lang: 'en',
+    confidence: 0.7,
+    re: /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/g,
+    resolve: (m, ref, opts) => {
+      const a = Number(m[1]);
+      const b = Number(m[2]);
+      const monthFirst = (opts.numericDateOrder ?? 'MDY') === 'MDY';
+      const month = monthFirst ? a : b;
+      const day = monthFirst ? b : a;
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      let year = ref.getUTCFullYear();
+      if (m[3]) {
+        const n = Number(m[3]);
+        year = m[3].length === 2 ? (n < 50 ? 2000 + n : 1900 + n) : n;
+      }
+      return { date: iso(new Date(Date.UTC(year, month - 1, day))), grain: 'day', confidence: m[3] ? 0.85 : 0.7 };
     },
   },
   // ── English relative ──
-  { lang: 'en', re: /\b(today|tonight)\b/gi, resolve: (_m, ref) => ({ date: iso(refMidnight(ref)), grain: 'day' }) },
-  { lang: 'en', re: /\bthe day after tomorrow\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 2)), grain: 'day' }) },
-  { lang: 'en', re: /\bthe day before yesterday\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -2)), grain: 'day' }) },
-  { lang: 'en', re: /\btomorrow\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 1)), grain: 'day' }) },
-  { lang: 'en', re: /\byesterday\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -1)), grain: 'day' }) },
-  { lang: 'en', re: /\bin\s+(\d{1,3})\s+days?\b/gi, resolve: (m, ref) => ({ date: iso(addDays(refMidnight(ref), Number(m[1]))), grain: 'day' }) },
-  { lang: 'en', re: /\bin\s+(\d{1,3})\s+weeks?\b/gi, resolve: (m, ref) => ({ date: iso(addDays(refMidnight(ref), Number(m[1]) * 7)), grain: 'week' }) },
-  { lang: 'en', re: /\bnext\s+week\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 7)), grain: 'week' }) },
-  { lang: 'en', re: /\blast\s+week\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -7)), grain: 'week' }) },
+  { lang: 'en', confidence: 0.95, re: /\b(today|tonight)\b/gi, resolve: (_m, ref) => ({ date: iso(refMidnight(ref)), grain: 'day' }) },
+  { lang: 'en', confidence: 0.9, re: /\bthe day after tomorrow\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 2)), grain: 'day' }) },
+  { lang: 'en', confidence: 0.9, re: /\bthe day before yesterday\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -2)), grain: 'day' }) },
+  { lang: 'en', confidence: 0.95, re: /\btomorrow\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 1)), grain: 'day' }) },
+  { lang: 'en', confidence: 0.95, re: /\byesterday\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -1)), grain: 'day' }) },
+  { lang: 'en', confidence: 0.9, re: /\bin\s+(\d{1,3})\s+days?\b/gi, resolve: (m, ref) => ({ date: iso(addDays(refMidnight(ref), Number(m[1]))), grain: 'day' }) },
+  { lang: 'en', confidence: 0.9, re: /\bin\s+(\d{1,3})\s+weeks?\b/gi, resolve: (m, ref) => ({ date: iso(addDays(refMidnight(ref), Number(m[1]) * 7)), grain: 'week' }) },
+  { lang: 'en', confidence: 0.85, re: /\bnext\s+week\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 7)), grain: 'week' }) },
+  { lang: 'en', confidence: 0.85, re: /\blast\s+week\b/gi, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -7)), grain: 'week' }) },
   {
     lang: 'en',
+    confidence: 0.8,
     re: new RegExp(`\\b(next|last|this)\\s+(${Object.keys(EN_WEEKDAYS).join('|')})\\b`, 'gi'),
     resolve: (m, ref) => {
       const dow = EN_WEEKDAYS[m[2]!.toLowerCase()];
@@ -193,6 +236,8 @@ const RULES: Rule[] = [
   },
   {
     lang: 'en',
+    confidence: 0.6,
+    bareWeekday: true,
     re: new RegExp(`\\b(${Object.keys(EN_WEEKDAYS).join('|')})\\b`, 'gi'),
     resolve: (m, ref) => {
       const dow = EN_WEEKDAYS[m[1]!.toLowerCase()];
@@ -201,22 +246,27 @@ const RULES: Rule[] = [
     },
   },
   // ── Persian relative ──
-  { lang: 'fa', re: /امروز/g, resolve: (_m, ref) => ({ date: iso(refMidnight(ref)), grain: 'day' }) },
-  { lang: 'fa', re: /پس‌?فردا/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 2)), grain: 'day' }) },
-  { lang: 'fa', re: /پریروز/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -2)), grain: 'day' }) },
-  { lang: 'fa', re: /فردا/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 1)), grain: 'day' }) },
-  { lang: 'fa', re: /دیروز/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -1)), grain: 'day' }) },
-  { lang: 'fa', re: /هفته[‌\s]?(?:ی[‌\s]?)?(?:بعد|آینده)/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 7)), grain: 'week' }) },
-  { lang: 'fa', re: /هفته[‌\s]?(?:ی[‌\s]?)?(?:پیش|گذشته|قبل)/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -7)), grain: 'week' }) },
+  { lang: 'fa', confidence: 0.95, re: /امروز/g, resolve: (_m, ref) => ({ date: iso(refMidnight(ref)), grain: 'day' }) },
+  { lang: 'fa', confidence: 0.9, re: /پس‌?فردا/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 2)), grain: 'day' }) },
+  { lang: 'fa', confidence: 0.9, re: /پریروز/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -2)), grain: 'day' }) },
+  { lang: 'fa', confidence: 0.95, re: /فردا/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 1)), grain: 'day' }) },
+  { lang: 'fa', confidence: 0.95, re: /دیروز/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -1)), grain: 'day' }) },
+  { lang: 'fa', confidence: 0.85, re: /هفته[‌\s]?(?:ی[‌\s]?)?(?:بعد|آینده)/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), 7)), grain: 'week' }) },
+  { lang: 'fa', confidence: 0.85, re: /هفته[‌\s]?(?:ی[‌\s]?)?(?:پیش|گذشته|قبل)/g, resolve: (_m, ref) => ({ date: iso(addDays(refMidnight(ref), -7)), grain: 'week' }) },
   {
+    // One regex matches bare and qualified; the qualifier gate lives in
+    // resolve so qualified Persian weekdays survive requireWeekdayQualifier.
     lang: 'fa',
+    confidence: 0.6,
     re: new RegExp(`(${FA_WEEKDAYS.map(([w]) => w).join('|')})(?:[\\u200c\\s]?(?:بعد|آینده|پیش|گذشته))?`, 'g'),
-    resolve: (m, ref) => {
+    resolve: (m, ref, opts) => {
       const found = FA_WEEKDAYS.find(([w]) => m[1] === w);
       if (!found) return null;
       const tail = m[0].slice(m[1]!.length);
+      const qualified = /پیش|گذشته|بعد|آینده/.test(tail);
+      if (!qualified && opts.requireWeekdayQualifier) return null;
       const dir: WeekdayDirection = /پیش|گذشته/.test(tail) ? 'last' : /بعد|آینده/.test(tail) ? 'next' : 'upcoming';
-      return { date: iso(resolveWeekday(ref, found[1], dir)), grain: 'day' };
+      return { date: iso(resolveWeekday(ref, found[1], dir)), grain: 'day', confidence: qualified ? 0.8 : 0.6 };
     },
   },
 ];
@@ -231,6 +281,7 @@ export function extractDates(text: string, opts: ExtractDatesOptions): DateMenti
   const found: DateMention[] = [];
   for (const rule of RULES) {
     if (langs && !langs.includes(rule.lang)) continue;
+    if (rule.bareWeekday && opts.requireWeekdayQualifier) continue;
     rule.re.lastIndex = 0;
     let m: RegExpExecArray | null;
     while ((m = rule.re.exec(text)) !== null) {
@@ -238,7 +289,7 @@ export function extractDates(text: string, opts: ExtractDatesOptions): DateMenti
         rule.re.lastIndex++;
         continue;
       }
-      const resolved = rule.resolve(m, opts.reference);
+      const resolved = rule.resolve(m, opts.reference, opts);
       if (resolved) {
         found.push({
           surface_form: m[0],
@@ -246,6 +297,7 @@ export function extractDates(text: string, opts: ExtractDatesOptions): DateMenti
           span_end: m.index + m[0].length,
           date: resolved.date,
           grain: resolved.grain,
+          confidence: resolved.confidence ?? rule.confidence,
         });
       }
     }

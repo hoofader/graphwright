@@ -101,3 +101,49 @@ describe('mechanics', () => {
     expect(at('just a quiet evening at home')).toEqual([]);
   });
 });
+
+describe('confidence', () => {
+  it('absolute forms score higher than a bare weekday', () => {
+    expect(at('2026-05-24')[0]!.confidence).toBeGreaterThan(0.9);
+    expect(at('see you tomorrow')[0]!.confidence).toBeGreaterThan(0.9);
+    expect(at('lunch on Monday')[0]!.confidence).toBeLessThan(0.7);
+    // month-name without a year is less certain than with one.
+    expect(at('May 24')[0]!.confidence).toBeLessThan(at('May 24, 2025')[0]!.confidence);
+  });
+});
+
+describe('requireWeekdayQualifier', () => {
+  const strict = (text: string) =>
+    extractDates(text, { reference: REF, requireWeekdayQualifier: true }).map((m) => m.surface_form);
+
+  it('drops a bare weekday but keeps a qualified one (English)', () => {
+    expect(strict('lunch on Monday')).toEqual([]);
+    expect(strict('coffee next Friday')).toEqual(['next Friday']);
+  });
+
+  it('drops a bare weekday but keeps a qualified one (Persian)', () => {
+    expect(strict('جمعه می‌رویم')).toEqual([]);
+    expect(extractDates('جمعه بعد می‌رویم', { reference: REF, requireWeekdayQualifier: true }).map((m) => m.date)).toEqual([
+      '2026-05-22',
+    ]);
+  });
+});
+
+describe('slashed numeric dates', () => {
+  it('M/D and M/D/YYYY (default MDY)', () => {
+    expect(dates('on 5/24')).toEqual(['2026-05-24']);
+    expect(dates('on 5/24/2025')).toEqual(['2025-05-24']);
+  });
+  it('two-digit year window', () => {
+    expect(dates('1/2/30')).toEqual(['2030-01-02']);
+    expect(dates('1/2/85')).toEqual(['1985-01-02']);
+  });
+  it('DMY reading order', () => {
+    expect(
+      extractDates('24/5/2025', { reference: REF, numericDateOrder: 'DMY' }).map((m) => m.date),
+    ).toEqual(['2025-05-24']);
+  });
+  it('rejects an impossible month', () => {
+    expect(dates('13/24')).toEqual([]);
+  });
+});
