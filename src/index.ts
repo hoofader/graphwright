@@ -30,12 +30,17 @@ export {
   extractEntities,
   parseExtractionResponse,
   buildTrustedContext,
+  extractDates,
   EXTRACTOR_SYSTEM,
   EXTRACTOR_PROMPT_VERSION,
 } from './extract/index.js';
 export type {
   BuiltTrustedContext,
   ContentLanguage,
+  DateGrain,
+  DateLanguage,
+  DateMention,
+  ExtractDatesOptions,
   ExtractionKind,
   ExtractedEntities,
   ExtractedMention,

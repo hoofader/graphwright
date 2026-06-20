@@ -31,6 +31,8 @@ export async function extractEntities(input: ExtractorInput): Promise<ExtractedE
 export { EXTRACTOR_SYSTEM, EXTRACTOR_PROMPT_VERSION } from './prompt.js';
 export { buildTrustedContext, type BuiltTrustedContext } from './context.js';
 export { parseExtractionResponse } from './parse.js';
+export { extractDates } from './dates.js';
+export type { DateGrain, DateLanguage, DateMention, ExtractDatesOptions } from './dates.js';
 export type {
   ContentLanguage,
   ExtractionKind,
