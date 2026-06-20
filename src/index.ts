@@ -101,3 +101,5 @@ export type { SupportReview } from './graph/support.js';
 // Storage
 export type { GraphStore } from './store/store.js';
 export { InMemoryGraphStore } from './store/memory.js';
+export { PostgresGraphStore, POSTGRES_SCHEMA } from './store/postgres.js';
+export type { SqlExecutor } from './store/postgres.js';

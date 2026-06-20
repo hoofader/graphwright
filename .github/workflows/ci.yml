@@ -11,6 +11,22 @@ jobs:
     name: Lint + Typecheck + Test + Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Postgres so the PostgresGraphStore integration test runs for real
+    # instead of skipping. Without GRAPHWRIGHT_PG_URL the test self-skips.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GRAPHWRIGHT_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
