@@ -133,6 +133,61 @@ describe('requireWeekdayQualifier', () => {
   });
 });
 
+describe('Persian (Jalali) absolute dates', () => {
+  it('day month year', () => {
+    expect(dates('۲۹ خرداد ۱۴۰۵ رفتیم')).toEqual(['2026-06-19']);
+    expect(dates('۲۲ بهمن ۱۳۵۷')).toEqual(['1979-02-11']); // the revolution
+  });
+
+  it('day month without a year resolves against the reference year', () => {
+    // REF is 30 Ordibehesht 1405, so a bare "۲۹ خرداد" means 1405.
+    const out = at('قرار ۲۹ خرداد داریم');
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ date: '2026-06-19', grain: 'day' });
+  });
+
+  it('month + year is a month grain', () => {
+    const out = at('خرداد ۱۴۰۵');
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ date: '2026-05-22', grain: 'month' });
+  });
+
+  it('numeric year/month/day in Persian, Latin, and Arabic-Indic digits', () => {
+    expect(dates('۱۴۰۵/۳/۲۹')).toEqual(['2026-06-19']);
+    expect(dates('1405/3/29')).toEqual(['2026-06-19']);
+    expect(dates('١٤٠٥/٣/٢٩')).toEqual(['2026-06-19']);
+  });
+
+  it('Esfand 30 resolves in a leap year, degrades to the month otherwise', () => {
+    expect(dates('۳۰ اسفند ۱۴۰۳')).toEqual(['2025-03-20']); // 1403 leap: a real 30th
+    // 1402 is common (no 30 Esfand); the day drops, the month still resolves.
+    const common = at('۳۰ اسفند ۱۴۰۲');
+    expect(common).toHaveLength(1);
+    expect(common[0]).toMatchObject({ date: '2024-02-20', grain: 'month', surface_form: 'اسفند ۱۴۰۲' });
+  });
+
+  it('the day-with-year form wins over the month+year inside it', () => {
+    const out = at('۲۹ خرداد ۱۴۰۵');
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ surface_form: '۲۹ خرداد ۱۴۰۵', grain: 'day' });
+  });
+
+  it('a four-digit Gregorian-range year stays out of the Jalali lane', () => {
+    // 2026 is outside the Jalali band, so this is not read as 1405-era.
+    expect(dates('2026/3/29')).not.toContain('2026-06-19');
+  });
+
+  it('a month word in prose without a number is not a date', () => {
+    expect(at('دیروز مهربون بود')).toHaveLength(1); // only دیروز (yesterday)
+    expect(at('دیروز مهربون بود')[0]!.date).toBe('2026-05-19');
+  });
+
+  it('confidence: with-year numeric/explicit beats a bare day-month', () => {
+    expect(at('۱۴۰۵/۳/۲۹')[0]!.confidence).toBeGreaterThan(0.85);
+    expect(at('۲۹ خرداد ۱۴۰۵')[0]!.confidence).toBeGreaterThan(at('۲۹ خرداد')[0]!.confidence);
+  });
+});
+
 describe('slashed numeric dates', () => {
   it('M/D and M/D/YYYY (default MDY)', () => {
     expect(dates('on 5/24')).toEqual(['2026-05-24']);

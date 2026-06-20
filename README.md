@@ -87,13 +87,12 @@ Early. The extraction and resolution layers are production-derived (extracted fr
 Landed recently:
 
 - Embedding-based candidate generation (`resolveCandidates({ embedder })`): when exact, phonetic, and fuzzy all miss, the candidate is nominated against the catalog by cosine and either judged or returned as a reviewable `'embedding'` proposal.
-- A rule-based, locale-aware date extraction lane (`extractDates`): English and Persian relative terms plus Gregorian absolute forms, resolved against a caller-supplied reference.
+- A rule-based, locale-aware date extraction lane (`extractDates`): English and Persian relative terms plus Gregorian and Jalali (Persian-calendar) absolute forms, resolved against a caller-supplied reference. Persian/Arabic-Indic digits and Solar Hijri month names are handled; `jalaliToGregorian`/`gregorianToJalali` are exported for hosts that display Jalali dates.
 - A Postgres `GraphStore` reference (`PostgresGraphStore`) over an injected executor, so the core stays dependency-free.
 
 Still on the path:
 
 - An ONNX adapter for zero-shot NER (GLiNER-class models) as a no-LLM extraction fallback. It needs a model runtime, so it will ship as a separate optional package rather than in the dependency-free core.
-- Jalali absolute-date parsing in the date lane (calendar conversion is its own concern).
 
 ## License
 

@@ -6,13 +6,14 @@
 // the same way every time, which is what makes it the testable floor
 // under the model-based extractor (the LLM is the upgrade, this is the
 // fallback). English and Persian relative terms are covered; Gregorian
-// absolute forms (ISO, month-name) are covered for both scripts. Jalali
-// absolute month names are intentionally out of scope for now (calendar
-// conversion is a separate, larger lane).
+// absolute forms (ISO, month-name) are covered for both scripts, and
+// Jalali (Persian-calendar) absolute forms resolve through `jalali.ts`.
 //
 // All arithmetic uses the UTC calendar components of `reference`, so a
 // caller passes "today" already shifted into the user's timezone and
 // gets stable yyyy-mm-dd back, free of host-timezone drift.
+
+import { gregorianToJalali, jalaliMonthLength, jalaliToGregorian } from './jalali.js';
 
 export type DateLanguage = 'en' | 'fa';
 export type DateGrain = 'day' | 'week' | 'month' | 'year';
@@ -56,6 +57,33 @@ function addDays(d: Date, n: number): Date {
 }
 function iso(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+function isoFromParts(y: number, m: number, day: number): string {
+  return iso(new Date(Date.UTC(y, m - 1, day)));
+}
+
+// Persian (۰-۹) and Arabic-Indic (٠-٩) digits read as their ASCII value.
+const DIGIT = '[0-9\\u06f0-\\u06f9\\u0660-\\u0669]';
+function digitsToNumber(s: string): number {
+  let out = '';
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    if (c >= 0x06f0 && c <= 0x06f9) out += String.fromCharCode(48 + c - 0x06f0);
+    else if (c >= 0x0660 && c <= 0x0669) out += String.fromCharCode(48 + c - 0x0660);
+    else out += ch;
+  }
+  return Number(out);
+}
+
+// A Jalali day, validated against its month length, as an ISO Gregorian
+// day. Out-of-range day or month yields null so the rule simply skips.
+function jalaliDay(jy: number, jm: number, jd: number): { date: string; grain: DateGrain } | null {
+  if (jm < 1 || jm > 12 || jd < 1 || jd > jalaliMonthLength(jy, jm)) return null;
+  const g = jalaliToGregorian(jy, jm, jd);
+  return { date: isoFromParts(g.gy, g.gm, g.gd), grain: 'day' };
+}
+function refJalaliYear(ref: Date): number {
+  return gregorianToJalali(ref.getUTCFullYear(), ref.getUTCMonth() + 1, ref.getUTCDate()).jy;
 }
 
 type WeekdayDirection = 'next' | 'last' | 'upcoming';
@@ -134,6 +162,25 @@ const FA_WEEKDAYS: Array<[string, number]> = [
   ['جمعه', 5],
   ['شنبه', 6],
 ];
+// Solar Hijri months. No name is a prefix of another, so alternation
+// order is free; مرداد has the امرداد variant, both map to 5.
+const FA_MONTHS: Array<[string, number]> = [
+  ['فروردین', 1],
+  ['اردیبهشت', 2],
+  ['خرداد', 3],
+  ['تیر', 4],
+  ['امرداد', 5],
+  ['مرداد', 5],
+  ['شهریور', 6],
+  ['مهر', 7],
+  ['آبان', 8],
+  ['آذر', 9],
+  ['دی', 10],
+  ['بهمن', 11],
+  ['اسفند', 12],
+];
+const FA_MONTH_ALT = FA_MONTHS.map(([w]) => w).join('|');
+const SEP = '[\\u200c\\s]+'; // ZWNJ or whitespace between date tokens
 
 interface Rule {
   lang: DateLanguage;
@@ -268,6 +315,46 @@ const RULES: Rule[] = [
       if (!qualified && opts.requireWeekdayQualifier) return null;
       const dir: WeekdayDirection = /پیش|گذشته/.test(tail) ? 'last' : /بعد|آینده/.test(tail) ? 'next' : 'upcoming';
       return { date: iso(resolveWeekday(ref, found[1], dir)), grain: 'day', confidence: qualified ? 0.8 : 0.6 };
+    },
+  },
+  // ── Persian (Jalali) absolute ──
+  {
+    // "۲۹ خرداد ۱۴۰۵" / "۲۹ خرداد" — day, month name, optional year.
+    // A day number is required, which keeps month words that double as
+    // common prose (مهر, دی, تیر) from matching on their own.
+    lang: 'fa',
+    confidence: 0.85,
+    re: new RegExp(`(?<!${DIGIT})(${DIGIT}{1,2})${SEP}(${FA_MONTH_ALT})(?:${SEP}(${DIGIT}{3,4})(?!${DIGIT}))?`, 'g'),
+    resolve: (m, ref) => {
+      const month = FA_MONTHS.find(([w]) => w === m[2])?.[1];
+      if (month === undefined) return null;
+      const jy = m[3] ? digitsToNumber(m[3]) : refJalaliYear(ref);
+      const day = jalaliDay(jy, month, digitsToNumber(m[1]!));
+      return day && { ...day, confidence: m[3] ? 0.95 : 0.85 };
+    },
+  },
+  {
+    // "خرداد ۱۴۰۵" — month name + year, no day. Month grain.
+    lang: 'fa',
+    confidence: 0.9,
+    re: new RegExp(`(${FA_MONTH_ALT})${SEP}(${DIGIT}{4})(?!${DIGIT})`, 'g'),
+    resolve: (m) => {
+      const month = FA_MONTHS.find(([w]) => w === m[1])?.[1];
+      if (month === undefined) return null;
+      const first = jalaliDay(digitsToNumber(m[2]!), month, 1);
+      return first && { date: first.date, grain: 'month' };
+    },
+  },
+  {
+    // "۱۴۰۵/۳/۲۹" — Jalali numeric, year first. The year band keeps a
+    // Gregorian "2026/3/29" (year out of the Jalali range) out of this lane.
+    lang: 'fa',
+    confidence: 0.9,
+    re: new RegExp(`(?<!${DIGIT})(${DIGIT}{4})/(${DIGIT}{1,2})/(${DIGIT}{1,2})(?!${DIGIT})`, 'g'),
+    resolve: (m) => {
+      const jy = digitsToNumber(m[1]!);
+      if (jy < 1000 || jy > 1700) return null;
+      return jalaliDay(jy, digitsToNumber(m[2]!), digitsToNumber(m[3]!));
     },
   },
 ];

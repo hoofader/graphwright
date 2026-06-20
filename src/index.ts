@@ -31,6 +31,10 @@ export {
   parseExtractionResponse,
   buildTrustedContext,
   extractDates,
+  jalaliToGregorian,
+  gregorianToJalali,
+  isLeapJalaliYear,
+  jalaliMonthLength,
   EXTRACTOR_SYSTEM,
   EXTRACTOR_PROMPT_VERSION,
 } from './extract/index.js';

@@ -33,6 +33,12 @@ export { buildTrustedContext, type BuiltTrustedContext } from './context.js';
 export { parseExtractionResponse } from './parse.js';
 export { extractDates } from './dates.js';
 export type { DateGrain, DateLanguage, DateMention, ExtractDatesOptions } from './dates.js';
+export {
+  jalaliToGregorian,
+  gregorianToJalali,
+  isLeapJalaliYear,
+  jalaliMonthLength,
+} from './jalali.js';
 export type {
   ContentLanguage,
   ExtractionKind,
