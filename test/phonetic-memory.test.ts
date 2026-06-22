@@ -47,31 +47,32 @@ describe('phonetic keys — cross-script equivalence', () => {
   });
 
   it('unclaimed scripts degrade to silence, not garbage', () => {
-    expect(phoneticKeys('Иван').size).toBe(0);
-    expect(phoneticMatch('Иван', 'ایوان')).toBe(false);
+    // Greek is not in the default registry.
+    expect(phoneticKeys('Ιβαν').size).toBe(0);
+    expect(phoneticMatch('Ιβαν', 'ایوان')).toBe(false);
   });
 
   it('mixed-script names keep signal from the claimed words', () => {
     // The unclaimed word drops out; the claimed word still matches.
-    const keys = phoneticKeys('Иван Karimi');
+    const keys = phoneticKeys('Ιβαν Karimi');
     expect(keys.size).toBeGreaterThan(0);
-    expect(phoneticMatch('Иван Karimi', 'Karimi')).toBe(true);
+    expect(phoneticMatch('Ιβαν Karimi', 'Karimi')).toBe(true);
   });
 
   it('a custom scheme extends the registry without touching built-ins', () => {
-    // Minimal Cyrillic scheme: enough to prove the seam works.
-    const cyrillic: PhoneticScheme = {
-      id: 'cyrl',
-      matches: (w) => /[а-яё]/.test(w),
+    // Minimal Greek scheme: enough to prove the seam works.
+    const greek: PhoneticScheme = {
+      id: 'grek',
+      matches: (w) => /[α-ωϊ-ώ]/.test(w),
       wordKeys: (w) => {
-        const map: Record<string, string> = { и: '', в: 'v', а: '', н: 'n' };
+        const map: Record<string, string> = { ι: '', β: 'v', α: '', ν: 'n' };
         let out = '';
         for (const ch of w) out += map[ch] ?? '';
         return out.length > 0 ? [out] : [];
       },
     };
-    const schemes = [...DEFAULT_PHONETIC_SCHEMES, cyrillic];
-    expect(phoneticMatch('Иван', 'ایوان', schemes)).toBe(true);
+    const schemes = [...DEFAULT_PHONETIC_SCHEMES, greek];
+    expect(phoneticMatch('Ιβαν', 'ایوان', schemes)).toBe(true);
   });
 
   it('schemes do not claim each other\'s scripts', () => {

@@ -71,6 +71,7 @@ export {
   phoneticMatch,
   latinScheme,
   persianScheme,
+  cyrillicScheme,
   DEFAULT_PHONETIC_SCHEMES,
 } from './resolve/phonetic/index.js';
 export type { PhoneticScheme } from './resolve/phonetic/index.js';

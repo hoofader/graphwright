@@ -16,13 +16,18 @@
 import { MAX_KEYS_PER_WORD, type PhoneticScheme } from './scheme.js';
 import { latinScheme } from './latin.js';
 import { persianScheme } from './persian.js';
+import { cyrillicScheme } from './cyrillic.js';
 
 /**
  * Registry order matters only when scripts overlap, which the default
  * schemes do not. Hosts extend by passing their own list (prepend a
  * specialized scheme to shadow a default one).
  */
-export const DEFAULT_PHONETIC_SCHEMES: readonly PhoneticScheme[] = [persianScheme, latinScheme];
+export const DEFAULT_PHONETIC_SCHEMES: readonly PhoneticScheme[] = [
+  persianScheme,
+  cyrillicScheme,
+  latinScheme,
+];
 
 /**
  * Build the set of phonetic keys for one name (any script, possibly
@@ -84,3 +89,4 @@ export type { PhoneticScheme } from './scheme.js';
 export { MAX_KEYS_PER_WORD, collapseRepeats, dedupeCap, expandClasses } from './scheme.js';
 export { latinScheme } from './latin.js';
 export { persianScheme } from './persian.js';
+export { cyrillicScheme } from './cyrillic.js';
