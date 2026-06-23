@@ -96,4 +96,4 @@ Still on the path:
 
 ## License
 
-Apache-2.0
+MIT

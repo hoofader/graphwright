@@ -2,7 +2,7 @@
   "name": "graphwright",
   "version": "0.1.0",
   "description": "Entity extraction and incremental knowledge-graph maintenance with a human-in-the-loop mention model. Storage-agnostic, LLM-provider-agnostic, TypeScript-native.",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "author": "Hoofader",
   "repository": {
     "type": "git",
