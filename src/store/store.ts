@@ -1,4 +1,4 @@
-// graphwright/store — the storage seam.
+// graphwright/store — the storage extension point.
 //
 // Hosts implement GraphStore over whatever they run (Postgres, SQLite,
 // a graph DB, an in-memory map). The library's planning functions are

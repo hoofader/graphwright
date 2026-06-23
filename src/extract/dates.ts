@@ -76,7 +76,7 @@ function digitsToNumber(s: string): number {
 }
 
 // A Jalali day, validated against its month length, as an ISO Gregorian
-// day. Out-of-range day or month yields null so the rule simply skips.
+// day. Out-of-range day or month yields null so the rule skips it.
 function jalaliDay(jy: number, jm: number, jd: number): { date: string; grain: DateGrain } | null {
   if (jm < 1 || jm > 12 || jd < 1 || jd > jalaliMonthLength(jy, jm)) return null;
   const g = jalaliToGregorian(jy, jm, jd);

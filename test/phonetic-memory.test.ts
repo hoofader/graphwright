@@ -60,7 +60,7 @@ describe('phonetic keys — cross-script equivalence', () => {
   });
 
   it('a custom scheme extends the registry without touching built-ins', () => {
-    // Minimal Greek scheme: enough to prove the seam works.
+    // Minimal Greek scheme: enough to prove the extension point works.
     const greek: PhoneticScheme = {
       id: 'grek',
       matches: (w) => /[α-ωϊ-ώ]/.test(w),

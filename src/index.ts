@@ -14,7 +14,7 @@ export type {
   MentionStatus,
 } from './types.js';
 
-// LLM seams
+// LLM extension points
 export type {
   Embedder,
   JudgePairInput,

@@ -1,4 +1,4 @@
-// graphwright — LLM injection seams.
+// graphwright — LLM injection extension points.
 //
 // The library never imports a provider SDK. Hosts adapt their own
 // gateway (with whatever safety wrapping, cost tracking, and redaction

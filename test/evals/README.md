@@ -51,7 +51,7 @@ name or a sound), then watch precision in the ablation.
 ## With a real model
 
 The library never imports an LLM SDK; the judge and embedder are injected
-seams. To score the semantic cases (and let the judge/embedder help on the
+extension points. To score the semantic cases (and let the judge/embedder help on the
 base set), point `GRAPHWRIGHT_EVAL_ADAPTER` at a module that exports `judge`
 and/or `embedder` wired to your gateway:
 
@@ -60,7 +60,7 @@ GRAPHWRIGHT_EVAL_ADAPTER=./my-eval-adapter.js pnpm eval
 ```
 
 ```ts
-// my-eval-adapter.ts — exports the graphwright LLM seams
+// my-eval-adapter.ts: exports the graphwright LLM extension points
 import type { PairJudge, Embedder } from 'graphwright';
 export const judge: PairJudge = async ({ left, right }) => { /* call your model */ };
 export const embedder: Embedder = async (texts) => { /* return vectors */ };
@@ -68,11 +68,11 @@ export const embedder: Embedder = async (texts) => { /* return vectors */ };
 
 ## Files
 
-- `corpus.ts` — the catalog and labeled cases (`base` is lexical; `semantic`
+- `corpus.ts`: the catalog and labeled cases (`base` is lexical; `semantic`
   needs a model). Invented names only.
-- `metrics.ts` — precision/recall/F1 over the merge decision (`metrics.test.ts`
+- `metrics.ts`: precision/recall/F1 over the merge decision (`metrics.test.ts`
   checks the math in normal CI).
-- `resolution.eval.test.ts` — the gated harness.
+- `resolution.eval.test.ts`: the gated harness.
 
 Add a case by appending to `corpus.ts` with the entity it should resolve to,
 or `null` if it should stay a new entity.

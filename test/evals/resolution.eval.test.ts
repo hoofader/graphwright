@@ -6,7 +6,7 @@
 //
 // The LLM stages are off unless you point GRAPHWRIGHT_EVAL_ADAPTER at a
 // module that exports `judge` and/or `embedder` (the graphwright LLM
-// seams) wired to your own gateway. With an adapter, the harder semantic
+// extension points) wired to your own gateway. With an adapter, the harder semantic
 // cases are scored too, and the recall floor rises.
 
 import { describe, it, expect } from 'vitest';
@@ -30,7 +30,7 @@ async function loadAdapter(): Promise<Adapter> {
 
 async function run(cases: EvalCase[], adapter: Adapter) {
   // Built conditionally: exactOptionalPropertyTypes rejects an explicit
-  // `undefined` for the optional seams.
+  // `undefined` for the optional extension points.
   const opts: Parameters<typeof resolveCandidates>[2] = {};
   if (adapter.judge) opts.judge = adapter.judge;
   if (adapter.embedder) opts.embedder = adapter.embedder;
