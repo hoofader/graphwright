@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { resolveCandidates, type Embedder, type PairJudge } from '../../src/index.js';
-import { CATALOG, BASE_CASES, SEMANTIC_CASES, type EvalCase } from './corpus.js';
+import { CATALOG, LEXICAL_CASES, SEMANTIC_CASES, type EvalCase } from './corpus.js';
 import { score, precision, recall, f1 } from './metrics.js';
 
 const RUN = !!process.env.GRAPHWRIGHT_RUN_EVALS;
@@ -55,17 +55,20 @@ function report(label: string, o: ReturnType<typeof score>) {
 
 describe.skipIf(!RUN)('resolution eval', () => {
   it('deterministic cascade clears the precision/recall floor', async () => {
+    // Score the lexical set (base + the adversarial cross-script cases),
+    // not just the always-right exact matches: the hard cases are where
+    // the cascade can actually drop recall or leak precision.
     const adapter = await loadAdapter();
-    const o = await run(BASE_CASES, adapter);
-    report('base', o);
+    const o = await run(LEXICAL_CASES, adapter);
+    report('lexical', o);
     expect(precision(o)).toBeGreaterThanOrEqual(0.85);
     expect(recall(o)).toBeGreaterThanOrEqual(0.85);
   });
 
   it.skipIf(!ADAPTER_PATH)('semantic cases lift recall with an adapter', async () => {
     const adapter = await loadAdapter();
-    const o = await run([...BASE_CASES, ...SEMANTIC_CASES], adapter);
-    report('base+semantic', o);
+    const o = await run([...LEXICAL_CASES, ...SEMANTIC_CASES], adapter);
+    report('lexical+semantic', o);
     // Precision must hold; recall should clear a higher bar than lexical alone.
     expect(precision(o)).toBeGreaterThanOrEqual(0.85);
     expect(recall(o)).toBeGreaterThanOrEqual(0.9);

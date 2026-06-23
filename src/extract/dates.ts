@@ -43,7 +43,12 @@ export interface ExtractDatesOptions {
    * "Tuesday's coffee was great". Default false.
    */
   requireWeekdayQualifier?: boolean;
-  /** Reading order for slashed numeric dates (1/2/2026). Default 'MDY'. */
+  /**
+   * Reading order for slashed numeric dates (`1/2/2026`). Default `'MDY'`,
+   * so `3/4/2026` reads as March 4. Set `'DMY'` for day-first locales. A
+   * 2-digit year pivots at 50: `00`-`49` map to 2000-2049, `50`-`99` to
+   * 1950-1999. Slashed dates carry low confidence (0.7) for this reason.
+   */
   numericDateOrder?: 'MDY' | 'DMY';
 }
 
@@ -60,6 +65,17 @@ function iso(d: Date): string {
 }
 function isoFromParts(y: number, m: number, day: number): string {
   return iso(new Date(Date.UTC(y, m - 1, day)));
+}
+// A Gregorian day as an ISO string, or null if the day does not exist in
+// that month. Date.UTC rolls "April 31" forward to May 1 instead of
+// rejecting it, so a round-trip check is the gate (the Jalali lane already
+// validates against month length; this does the same for Gregorian).
+function gregorianDay(year: number, month0: number, day: number): string | null {
+  const d = new Date(Date.UTC(year, month0, day));
+  if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month0 || d.getUTCDate() !== day) {
+    return null;
+  }
+  return iso(d);
 }
 
 // Persian (۰-۹) and Arabic-Indic (٠-٩) digits read as their ASCII value.
@@ -205,7 +221,8 @@ const RULES: Rule[] = [
     resolve: (m) => {
       const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
       if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-      return { date: iso(new Date(Date.UTC(y, mo - 1, d))), grain: 'day' };
+      const date = gregorianDay(y, mo - 1, d);
+      return date ? { date, grain: 'day' } : null;
     },
   },
   {
@@ -221,7 +238,8 @@ const RULES: Rule[] = [
       const day = Number(m[2]);
       if (day < 1 || day > 31) return null;
       const year = m[3] ? Number(m[3]) : ref.getUTCFullYear();
-      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day', confidence: m[3] ? 0.95 : 0.85 };
+      const date = gregorianDay(year, month, day);
+      return date ? { date, grain: 'day', confidence: m[3] ? 0.95 : 0.85 } : null;
     },
   },
   {
@@ -237,7 +255,8 @@ const RULES: Rule[] = [
       const day = Number(m[1]);
       if (day < 1 || day > 31) return null;
       const year = m[3] ? Number(m[3]) : ref.getUTCFullYear();
-      return { date: iso(new Date(Date.UTC(year, month, day))), grain: 'day', confidence: m[3] ? 0.95 : 0.85 };
+      const date = gregorianDay(year, month, day);
+      return date ? { date, grain: 'day', confidence: m[3] ? 0.95 : 0.85 } : null;
     },
   },
   {
@@ -257,7 +276,8 @@ const RULES: Rule[] = [
         const n = Number(m[3]);
         year = m[3].length === 2 ? (n < 50 ? 2000 + n : 1900 + n) : n;
       }
-      return { date: iso(new Date(Date.UTC(year, month - 1, day))), grain: 'day', confidence: m[3] ? 0.85 : 0.7 };
+      const date = gregorianDay(year, month - 1, day);
+      return date ? { date, grain: 'day', confidence: m[3] ? 0.85 : 0.7 } : null;
     },
   },
   // ── English relative ──

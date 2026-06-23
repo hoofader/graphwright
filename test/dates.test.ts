@@ -56,6 +56,18 @@ describe('absolute dates', () => {
     expect(dates('born 24 May 2025')).toEqual(['2025-05-24']);
     expect(dates('December 1, 2026 deadline')).toEqual(['2026-12-01']);
   });
+  it('rejects a day that does not exist in the month, not roll it forward', () => {
+    // Date.UTC would turn each of these into the first of the next month.
+    expect(dates('on 2024-04-31')).toEqual([]);
+    expect(dates('on 2024-02-30')).toEqual([]);
+    expect(dates('April 31, 2024')).toEqual([]);
+    expect(dates('30 February 2024')).toEqual([]);
+    expect(dates('on 2/30/2024')).toEqual([]);
+  });
+  it('keeps a real leap day and rejects a non-leap Feb 29', () => {
+    expect(dates('on 2024-02-29')).toEqual(['2024-02-29']);
+    expect(dates('on 2025-02-29')).toEqual([]);
+  });
 });
 
 describe('Persian relative dates', () => {
